@@ -4,22 +4,17 @@ const video = document.getElementById('webcam');
 const videoout = document.getElementById('videoout');
 const state = document.getElementById('state');
 const percent = document.getElementById('percent');
+const repImages = document.getElementById('reps');
 
-let OpenCVReady = false;
-let cap;
-let currentFrame;
-let lastFrame;
-let green
-function OpenCVLoaded() {
-  cv['onRuntimeInitialized'] = () => {
-    console.log('OpenCV loaded!');
-    OpenCVReady = true;
-    cap = new cv.VideoCapture(video);
-    currentFrame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-    lastFrame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-    green = new cv.Scalar(0, 255, 0);
-  };
-}
+let classifier;
+let poseNet;
+
+tf.loadLayersModel("http://localhost:8080/mobilenet-js_model/v2/model.json")
+.then((model) => {
+  console.log('Classifier loaded!');
+  classifier = model;
+  warmUpModel();
+});
 
 let modelReady = false;
 function warmUpModel() {
@@ -35,17 +30,10 @@ function warmUpModel() {
   dummyInput.dispose();
   modelReady = true;
   console.log('Done.');
+  if (typeof poseNet !== 'undefined')
+    enableButton.disabled = false;
 }
 
-let classifier = null;
-tf.loadLayersModel("http://localhost:8080/mobilenet-js_model/v2/model.json")
-.then((model) => {
-  console.log('Classifier loaded!');
-  classifier = model;
-  warmUpModel();
-});
-
-let poseNet = undefined;
 posenet.load({
   architecture: 'MobileNetV1',
   outputStride: 16,
@@ -55,15 +43,12 @@ posenet.load({
 }).then(function(model) {
   console.log('PoseNet loaded!');
   poseNet = model;
+  if (modelReady)
+    enableButton.disabled = false;
 });
 
-window.setInterval(() => {
-  if (typeof poseNet !== 'undefined' && modelReady && OpenCVReady)
-    enableButton.disabled = false;
-}, 500);
-
 function enableCam() {
-  if (typeof poseNet === 'undefined' || !modelReady || !OpenCVReady)
+  if (typeof poseNet === 'undefined' || !modelReady)
     return;
 
   console.log('Camera on');
@@ -72,50 +57,8 @@ function enableCam() {
   .then(function(stream) {
     video.srcObject = stream;
     video.addEventListener('loadeddata', predictExercise);
-    //video.addEventListener('loadeddata', count);
     video.addEventListener('loadeddata', predictPose);
   });
-}
-
-let lastGray;
-function count() {
-  cap.read(currentFrame);
-  
-  const imgGray = new cv.Mat(video.height, video.width, cv.CV_8UC1);
-  cv.cvtColor(currentFrame, imgGray, cv.COLOR_RGBA2GRAY);
-
-  if (typeof lastGray === 'undefined') {
-    lastGray = imgGray;
-    window.requestAnimationFrame(count);
-    return;
-  }
-
-  const imgDiff = new cv.Mat(video.height, video.width, cv.CV_8UC1);
-  cv.absdiff(lastGray, imgGray, imgDiff);
-  lastGray.delete();
-  lastGray = imgGray;
-  
-  /*const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5,5));
-  const imgDilated = new cv.Mat(video.height, video.width, cv.CV_8UC1);
-  console.log(imgDiff.type())
-  cv.dilate(imgDiff, imgDilated, new cv.Point(-1, 1), 4);
-  kernel.delete();*/
-  
-  let contours = new cv.MatVector();
-  let hierarchy = new cv.Mat();
-  cv.findContours(imgDiff, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
-  cv.drawContours (imgDiff, contours, -1, green, 10, cv.LINE_8, hierarchy, 1);
-
-  
-
-  // show
-  videoout.width = video.width
-  videoout.height = video.height
-  cv.imshow('videoout', imgDiff);
-  //imgDilated.delete();
-  imgDiff.delete();
-  
-  window.requestAnimationFrame(count);
 }
 
 let ys = [];
@@ -126,9 +69,11 @@ let lastDir = false;
 function resetCounter() {
   counter.innerText = 0;
   reps = 0;
+  while (repImages.hasChildNodes())
+    repImages.removeChild(repImages.lastChild);
 }
 
-const classes = ['BodyWeightSquats', 'PullUps', 'PushUps']
+const classes = ['Squats', 'PullUps', 'PushUps'];
 const predictedLabels = [];
 async function predictExercise() {
   tf.engine().startScope();
@@ -170,7 +115,8 @@ function draw(position) {
   ctx.fill();
 }
 
-const keypointIndices = [0, 1, 2, 3, 4, 5, 6];
+const firstIndex = 0;
+const lastIndex = 6;
 function predictPose() {
   poseNet.estimateSinglePose(video, {
     flipHorizontal: false
@@ -181,14 +127,11 @@ function predictPose() {
     }
 
     // calculate upper body y position
-    keypoints = pose.keypoints.slice(
-      keypointIndices[0], 
-      keypointIndices[keypointIndices.length-1]
-    )
+    keypoints = pose.keypoints.slice(firstIndex, lastIndex+1);
     let xPos = 0;
     let div = 0;
     keypoints.forEach(kp => {
-      if (kp.score > 0.85) {
+      if (kp.score >= 0.85) {
         xPos += kp.position.x
         div++;
       }
@@ -196,7 +139,7 @@ function predictPose() {
     xPos /= div;
     let yPos = 0;
     keypoints.forEach(kp => {
-      if (kp.score > 0.85)
+      if (kp.score >= 0.85)
         yPos += kp.position.y
     });
     yPos /= div;
@@ -222,7 +165,7 @@ function predictPose() {
 function saveImage(dataUrl) {
   const img = document.createElement('img');
   img.src = dataUrl;
-  document.body.appendChild(img);
+  repImages.appendChild(img);
 }
 
 const eps = video.height / 10;
