@@ -1,4 +1,5 @@
 const counter = document.getElementById('counter');
+const enableButton = document.getElementById('enable');
 const video = document.getElementById('webcam');
 const videoout = document.getElementById('videoout');
 const state = document.getElementById('state');
@@ -48,15 +49,21 @@ let poseNet = undefined;
 posenet.load({
   architecture: 'MobileNetV1',
   outputStride: 16,
-  inputResolution: { width: 640, height: 480 },
-  multiplier: 0.75
+  inputResolution: { width: 400, height: 320 },
+  multiplier: 0.75,
+  quantBytes: 2
 }).then(function(model) {
   console.log('PoseNet loaded!');
   poseNet = model;
 });
 
+window.setInterval(() => {
+  if (typeof poseNet !== 'undefined' && modelReady && OpenCVReady)
+    enableButton.disabled = false;
+}, 500);
+
 function enableCam() {
-  if (typeof poseNet == 'undefined' || !modelReady || !OpenCVReady)
+  if (typeof poseNet === 'undefined' || !modelReady || !OpenCVReady)
     return;
 
   console.log('Camera on');
@@ -168,8 +175,10 @@ function predictPose() {
   poseNet.estimateSinglePose(video, {
     flipHorizontal: false
   }).then(pose => {
-    if (reps >= maxReps)
+    if (reps >= maxReps) {
+      window.requestAnimationFrame(predictPose);
       return;
+    }
 
     // calculate upper body y position
     keypoints = pose.keypoints.slice(
@@ -177,16 +186,26 @@ function predictPose() {
       keypointIndices[keypointIndices.length-1]
     )
     let xPos = 0;
-    keypoints.forEach(kp => xPos += kp.position.x);
-    xPos /= keypointIndices.length;
+    let div = 0;
+    keypoints.forEach(kp => {
+      if (kp.score > 0.85) {
+        xPos += kp.position.x
+        div++;
+      }
+    });
+    xPos /= div;
     let yPos = 0;
-    keypoints.forEach(kp => yPos += kp.position.y);
-    yPos /= keypointIndices.length;
+    keypoints.forEach(kp => {
+      if (kp.score > 0.85)
+        yPos += kp.position.y
+    });
+    yPos /= div;
     position = { x: xPos, y: yPos };
-    console.log(xPos + ' ' + yPos);
+    
+    console.log(keypoints);
 
     draw(position)
-    if (ys.length == 2)
+    if (ys.length == 5)
       ys.shift()
     ys.push(position.y)
     const rising = isRising(ys);
