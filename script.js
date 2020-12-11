@@ -37,24 +37,36 @@ function warmUpModel() {
 }
 
 let classifier = null;
-classifier = tf.loadLayersModel("http://localhost:8080/mobilenet-js_model/v2/model.json")
+tf.loadLayersModel("http://localhost:8080/mobilenet-js_model/v2/model.json")
 .then((model) => {
   console.log('Classifier loaded!');
   classifier = model;
   warmUpModel();
 });
 
+let poseNet = undefined;
+posenet.load({
+  architecture: 'MobileNetV1',
+  outputStride: 16,
+  inputResolution: { width: 640, height: 480 },
+  multiplier: 0.75
+}).then(function(model) {
+  console.log('PoseNet loaded!');
+  poseNet = model;
+});
+
 function enableCam() {
-  if (!(modelReady && OpenCVReady))
+  if (typeof poseNet == 'undefined' || !modelReady || !OpenCVReady)
     return;
 
-  console.log('Camera');
+  console.log('Camera on');
   const constraints = { video: true };
   navigator.mediaDevices.getUserMedia(constraints)
   .then(function(stream) {
     video.srcObject = stream;
     video.addEventListener('loadeddata', predictExercise);
-    video.addEventListener('loadeddata', count);
+    //video.addEventListener('loadeddata', count);
+    video.addEventListener('loadeddata', predictPose);
   });
 }
 
@@ -81,25 +93,14 @@ function count() {
   console.log(imgDiff.type())
   cv.dilate(imgDiff, imgDilated, new cv.Point(-1, 1), 4);
   kernel.delete();*/
-  /*
-  if (typeof lastGray === 'undefined') {
-    lastGray = currentGray.clone();
-    currentGray.delete();
-    console.log('Got lastGray');
-    window.requestAnimationFrame(count);
-    return;
-  }
-  const kernel = cv.getStructuringElement(cv.MORPH_RECT,new cv.Size(5,5));
-  const diff = new cv.Mat();
-  cv.absdiff(currentGray, lastGray, diff);*/
-  //cv.dilate(diff, diff, kernel, iterations=4);
   
-  /*let contours = new cv.MatVector();
+  let contours = new cv.MatVector();
   let hierarchy = new cv.Mat();
-  cv.findContours(dst, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
-  cv.drawContours (dst, contours, -1, color, 1, cv.LINE_8, hierarchy, 10)
+  cv.findContours(imgDiff, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+  cv.drawContours (imgDiff, contours, -1, green, 10, cv.LINE_8, hierarchy, 1);
+
   
-  lastGray = currentGray.clone();*/
+
   // show
   videoout.width = video.width
   videoout.height = video.height
@@ -151,15 +152,26 @@ async function predictExercise() {
   window.requestAnimationFrame(predictExercise);
 }
 
+function draw(position) {
+  videoout.width = video.width;
+  videoout.height = video.height;
+  const ctx = videoout.getContext('2d');
+  ctx.drawImage(video, 0, 0, video.width, video.height);
+  ctx.fillStyle = 'green';
+  ctx.beginPath();
+  ctx.arc(position.x, position.y, 5, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
 const keypointIndices = [0, 1, 2, 3, 4, 5, 6];
 function predictPose() {
   poseNet.estimateSinglePose(video, {
     flipHorizontal: false
-  }).then((pose) => {
+  }).then(pose => {
     if (reps >= maxReps)
       return;
 
-    // nose y position
+    // calculate upper body y position
     keypoints = pose.keypoints.slice(
       keypointIndices[0], 
       keypointIndices[keypointIndices.length-1]
@@ -172,17 +184,16 @@ function predictPose() {
     yPos /= keypointIndices.length;
     position = { x: xPos, y: yPos };
     console.log(xPos + ' ' + yPos);
-    //drawAll(positions)
+
     draw(position)
     if (ys.length == 2)
       ys.shift()
     ys.push(position.y)
     const rising = isRising(ys);
-    state.innerText = (pose.keypoints[5].score + pose.keypoints[5].score) / 2;
     if (!rising && lastDir) {
       reps++;
       counter.innerText = reps;
-      saveImage(canvas.toDataURL());
+      saveImage(videoout.toDataURL());
     }
     lastDir = rising;
     window.requestAnimationFrame(predictPose);
