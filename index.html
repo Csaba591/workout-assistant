@@ -1,0 +1,16 @@
+<html>
+  <body>
+    <button id="enable" onclick="enableCam()">Enable webcam</button>
+    <video id="webcam" autoplay width="640" height="480"></video>
+    <canvas id="videoout"></canvas>
+    <h1 id="counter">0</h1>
+    <button onclick="resetCounter()">reset</button>
+    <h2 id="state"></h2>
+    <h2 id="percent"></h2>
+    
+    <!-- Load TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js" type="text/javascript"></script>
+    <script async src="opencv.js" type="text/javascript" onload="OpenCVLoaded()"></script>
+    <script src="script.js" type="text/javascript"></script>
+  </body>
+</html>
