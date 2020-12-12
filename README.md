@@ -19,5 +19,5 @@
 2. Open a terminal in the repo directory
     1. Install [node.js and npm](https://nodejs.org/)
     2. Install http-server: `npm install --global http-server`
-    3. Run `http-server`
-3. Open localhost:8080 in a browser
+    3. Run `http-server --port 5500`
+3. Open localhost:5500 in a browser
