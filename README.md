@@ -16,9 +16,7 @@
     
 ## Run web app
 1. Clone the repository
-2. Open a terminal in the repo directory
-    1. Install [node.js and npm](https://nodejs.org/)
-    2. Install http-server: `npm install --global http-server`
-    3. `cd views/`
-    4. Run `http-server --port 5500`
+2. Open it in VSCode
+3. Install the Live Server extension
+4. Right click on views/index.html -> Open with Live Server
 3. Open localhost:5500 in a browser
