@@ -1,4 +1,5 @@
 # Workout Assistant
+Presentation video: https://www.youtube.com/watch?v=tc_AOJM4pBM&feature=youtu.be
 ## Explore the UCF101 dataset
 1. Open Dataset.ipynb [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1EQrePHpLFadgS7Zl1FigE1YdU_vOZJNX)
 2. Run all
